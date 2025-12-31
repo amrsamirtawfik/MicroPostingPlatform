@@ -1,0 +1,232 @@
+MicroPost Backend API
+Node.js + Express backend for the MicroPost application.
+
+🚀 Quick Start
+Prerequisites
+Node.js 18+ and npm
+Installation
+bash
+# Install dependencies
+npm install
+
+# Create environment file
+cp .env.example .env
+
+# Edit .env and set your configuration
+# IMPORTANT: Change JWT_SECRET in production!
+
+# Start development server
+npm run dev
+The server will start on http://localhost:5000
+
+📁 Project Structure
+backend/
+├── src/
+│   ├── config/          # Configuration files
+│   ├── controllers/     # Request handlers (MVC Controllers)
+│   ├── middleware/      # Express middleware
+│   ├── models/          # Business logic (MVC Models)
+│   ├── routes/          # Route definitions
+│   ├── services/        # External services (DB, cache, crypto)
+│   ├── utils/           # Utility functions
+│   ├── app.js           # Express app setup
+│   └── server.js        # Server entry point
+├── package.json
+├── .env.example
+└── README.md
+🔐 Authentication
+This API uses JWT (JSON Web Tokens) for authentication.
+
+How it works:
+User logs in with email/password → receives JWT token
+Client stores token (localStorage/cookies)
+Client sends token in Authorization header for protected routes
+Server verifies token and extracts user info
+Protected Routes
+Include the JWT token in the Authorization header:
+
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+📚 API Endpoints
+Authentication
+Register
+http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "securePassword123",
+  "displayName": "John Doe"
+}
+Login
+http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "securePassword123"
+}
+Get Current User
+http
+GET /api/auth/me
+Authorization: Bearer YOUR_JWT_TOKEN
+Users
+Get All Users
+http
+GET /api/users
+Get User by ID
+http
+GET /api/users/:userId
+Get User's Posts
+http
+GET /api/users/:userId/posts?limit=20&offset=0&order=DESC
+Posts
+Get All Posts (Feed)
+http
+GET /api/posts?limit=20&offset=0&order=DESC
+Get Post by ID
+http
+GET /api/posts/:postId
+Create Post
+http
+POST /api/posts
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+{
+  "content": "This is my post!"
+}
+Delete Post
+http
+DELETE /api/posts/:postId
+Authorization: Bearer YOUR_JWT_TOKEN
+🔒 Security Features
+Password Hashing: bcrypt with configurable rounds
+JWT Authentication: Secure token-based auth
+Account Lockout: After multiple failed login attempts
+Timing Attack Prevention: Constant-time comparisons
+Input Validation: Server-side validation for all inputs
+Content Sanitization: XSS prevention
+Rate Limiting: Prevents abuse
+CORS: Configured for frontend origin
+Helmet: Security headers
+🗄️ Database
+Currently uses in-memory storage for development.
+
+Production Migration
+For production, replace src/services/database.service.js with a real database:
+
+Option 1: PostgreSQL with Prisma
+bash
+npm install @prisma/client prisma
+npx prisma init
+Option 2: MongoDB with Mongoose
+bash
+npm install mongoose
+Option 3: MySQL with Sequelize
+bash
+npm install sequelize mysql2
+📝 Environment Variables
+env
+# Server
+PORT=5000
+NODE_ENV=development
+
+# JWT
+JWT_SECRET=your-secret-key-here
+JWT_EXPIRES_IN=7d
+
+# CORS
+FRONTEND_URL=http://localhost:5173
+
+# Security
+BCRYPT_ROUNDS=12
+MAX_FAILED_LOGIN_ATTEMPTS=5
+ACCOUNT_LOCKOUT_DURATION_MS=900000
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+🧪 Testing
+bash
+# Run tests (if configured)
+npm test
+🚀 Production Deployment
+1. Set Environment Variables
+bash
+NODE_ENV=production
+JWT_SECRET=<strong-random-secret>
+2. Start Server
+bash
+npm start
+3. Use Process Manager
+bash
+# With PM2
+npm install -g pm2
+pm2 start src/server.js --name micropost-api
+pm2 save
+pm2 startup
+4. Deploy to Cloud
+Heroku
+bash
+heroku create your-app-name
+git push heroku main
+heroku config:set JWT_SECRET=your-secret
+Railway
+bash
+railway login
+railway init
+railway up
+AWS/DigitalOcean
+Set up Node.js environment
+Configure nginx as reverse proxy
+Set environment variables
+Use PM2 for process management
+📊 Monitoring
+Health Check
+http
+GET /health
+Returns server status and uptime.
+
+🛠️ Development
+Code Structure (MVC)
+Models (src/models/): Business logic, validation, authorization
+Views: Frontend (React app)
+Controllers (src/controllers/): Handle HTTP requests/responses
+Routes (src/routes/): Define endpoints
+Middleware (src/middleware/): Request processing
+Services (src/services/): External integrations
+Adding New Features
+Add Model (business logic)
+javascript
+   // src/models/Comment.model.js
+   const CommentModel = {
+     create: async (postId, userId, content) => { ... },
+   };
+Add Controller (HTTP handler)
+javascript
+   // src/controllers/comment.controller.js
+   const createComment = asyncHandler(async (req, res) => {
+     const comment = await CommentModel.create(...);
+     res.status(201).json(comment);
+   });
+Add Route (endpoint)
+javascript
+   // src/routes/comment.routes.js
+   router.post('/posts/:postId/comments', requireAuth, createComment);
+Register Route in src/app.js
+javascript
+   app.use('/api/comments', commentRoutes);
+Demo Credentials
+Email: alice@example.com
+Password: password123
+
+Email: bob@example.com
+Password: password123
+
+Email: charlie@example.com
+Password: password123
+📄 License
+MIT
+
