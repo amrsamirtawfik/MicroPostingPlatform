@@ -1,17 +1,16 @@
 /**
- * API Service Layer
+ * API Service Layer (Frontend)
  * 
- * Centralized API client that simulates HTTP calls to the backend.
- * In production, this would make actual fetch/axios calls.
+ * HTTP client that makes actual requests to the backend API.
+ * Replaces direct model calls with fetch/axios requests.
  * 
- * This layer provides:
- * - Consistent error handling
- * - Request/response logging
- * - Token injection for authenticated requests
+ * Changes from original:
+ * - ❌ REMOVED: Direct imports of UserModel, PostModel
+ * - ✅ ADDED: HTTP requests using fetch API
+ * - ✅ ADDED: Token injection for authenticated requests
+ * - ✅ ADDED: Proper error handling
  */
 
-import { UserModel } from '@/models/UserModel';
-import { PostModel } from '@/models/PostModel';
 import { 
   SafeUser, 
   PublicProfile, 
@@ -21,116 +20,199 @@ import {
   ApiResponse,
   PaginationOptions 
 } from '@/types';
-import { AppError } from '@/lib/errors';
 
-// Simulate network delay for realism
-const simulateLatency = () => new Promise(resolve => 
-  setTimeout(resolve, Math.random() * 200 + 100)
-);
+// Backend API base URL - configure based on environment
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Helper to wrap responses
-const handleRequest = async <T>(
-  operation: () => Promise<T>
+/**
+ * Get auth token from localStorage
+ */
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('micropost_token');
+};
+
+/**
+ * Make HTTP request with common configuration
+ */
+const request = async <T>(
+  endpoint: string,
+  options: RequestInit = {}
 ): Promise<ApiResponse<T>> => {
-  await simulateLatency();
-  
   try {
-    const data = await operation();
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    // Add default headers
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    
+    // Add auth token if available
+    const token = getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    
+    // Parse response
+    const data = await response.json();
+    
+    // Handle error responses
+    if (!response.ok) {
+      return {
+        error: data.error || 'Request failed',
+        code: data.code || 'UNKNOWN_ERROR',
+      };
+    }
+    
     return { data };
   } catch (error) {
-    if (error instanceof AppError) {
-      return { error: error.message, code: error.code };
-    }
-    return { error: 'An unexpected error occurred', code: 'INTERNAL_ERROR' };
+    console.error('API request failed:', error);
+    return {
+      error: 'Network error. Please check your connection.',
+      code: 'NETWORK_ERROR',
+    };
   }
 };
 
 export const api = {
   // Auth endpoints
   auth: {
+    /**
+     * Login user
+     */
     login: async (email: string, password: string): Promise<ApiResponse<AuthSession>> => {
       console.log('[API] POST /auth/login');
-      return handleRequest(async () => {
-        const result = await UserModel.authenticate(email, password);
-        return result;
+      return request<AuthSession>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
       });
     },
 
+    /**
+     * Register new user
+     */
     register: async (
       email: string, 
       password: string, 
       displayName: string
     ): Promise<ApiResponse<AuthSession>> => {
       console.log('[API] POST /auth/register');
-      return handleRequest(async () => {
-        const result = await UserModel.register(email, password, displayName);
-        return result;
+      return request<AuthSession>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, displayName }),
       });
     },
 
-    // Validate token and get user (for session restoration)
+    /**
+     * Get current user (validate session)
+     */
     me: async (token: string): Promise<ApiResponse<SafeUser>> => {
       console.log('[API] GET /auth/me');
-      return handleRequest(async () => {
-        // In a real app, we'd verify the JWT and fetch user
-        // For mock, we decode the token
-        const { verifyToken } = await import('@/lib/crypto');
-        const payload = verifyToken(token);
-        if (!payload) {
-          throw new Error('Invalid token');
-        }
-        const profile = await UserModel.getById(payload.userId);
-        return {
-          id: profile.id,
-          displayName: profile.displayName,
-          avatarUrl: profile.avatarUrl,
-          email: payload.email,
-        };
+      return request<SafeUser>('/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
     },
   },
 
   // User endpoints
   users: {
+    /**
+     * Get all users
+     */
     getAll: async (): Promise<ApiResponse<PublicProfile[]>> => {
       console.log('[API] GET /users');
-      return handleRequest(() => UserModel.getAll());
+      return request<PublicProfile[]>('/users');
     },
 
+    /**
+     * Get user by ID
+     */
     getById: async (userId: string): Promise<ApiResponse<PublicProfile>> => {
       console.log(`[API] GET /users/${userId}`);
-      return handleRequest(() => UserModel.getById(userId));
+      return request<PublicProfile>(`/users/${userId}`);
     },
   },
 
   // Post endpoints
   posts: {
+    /**
+     * Get all posts (feed)
+     */
     getAll: async (options?: PaginationOptions): Promise<ApiResponse<PostWithAuthor[]>> => {
       console.log('[API] GET /posts');
-      return handleRequest(() => PostModel.getAllWithAuthors(options));
+      
+      // Build query string
+      const params = new URLSearchParams();
+      if (options?.limit) params.append('limit', options.limit.toString());
+      if (options?.offset) params.append('offset', options.offset.toString());
+      if (options?.order) params.append('order', options.order);
+      
+      const query = params.toString();
+      const endpoint = query ? `/posts?${query}` : '/posts';
+      
+      return request<PostWithAuthor[]>(endpoint);
     },
 
+    /**
+     * Get posts by user ID
+     */
     getByUserId: async (
       userId: string, 
       options?: PaginationOptions
     ): Promise<ApiResponse<Post[]>> => {
       console.log(`[API] GET /users/${userId}/posts`);
-      return handleRequest(() => PostModel.getByUserId(userId, options));
+      
+      const params = new URLSearchParams();
+      if (options?.limit) params.append('limit', options.limit.toString());
+      if (options?.offset) params.append('offset', options.offset.toString());
+      if (options?.order) params.append('order', options.order);
+      
+      const query = params.toString();
+      const endpoint = query ? `/users/${userId}/posts?${query}` : `/users/${userId}/posts`;
+      
+      return request<Post[]>(endpoint);
     },
 
+    /**
+     * Get post by ID
+     */
     getById: async (postId: string): Promise<ApiResponse<PostWithAuthor>> => {
       console.log(`[API] GET /posts/${postId}`);
-      return handleRequest(() => PostModel.getById(postId));
+      return request<PostWithAuthor>(`/posts/${postId}`);
     },
 
+    /**
+     * Create new post
+     */
     create: async (userId: string, content: string): Promise<ApiResponse<Post>> => {
       console.log('[API] POST /posts');
-      return handleRequest(() => PostModel.create(userId, content));
+      return request<Post>('/posts', {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      });
     },
 
+    /**
+     * Delete post
+     */
     delete: async (postId: string, userId: string): Promise<ApiResponse<boolean>> => {
       console.log(`[API] DELETE /posts/${postId}`);
-      return handleRequest(() => PostModel.deleteOwned(postId, userId));
+      const response = await request<{ success: boolean }>(`/posts/${postId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.data) {
+        return { data: response.data.success };
+      }
+      
+      return { error: response.error, code: response.code };
     },
   },
 };
