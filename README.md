@@ -20,6 +20,12 @@ npm i
 
 # Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
+
+# Step 5: Navigate into the backend directory
+cd backend
+
+# Step 6: Run the backend server
+npm run dev
 ```
 
 
